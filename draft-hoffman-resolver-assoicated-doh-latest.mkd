@@ -1,0 +1,287 @@
+---
+title: Associating a DoH Server with a Resolver
+abbrev: Resolver Associated DoH
+docname: draft-hoffman-resolver-associated-doh
+
+stand_alone: true
+
+ipr: trust200902
+kw: Internet-Draft
+cat: std
+
+pi:
+  toc: yes
+  tocdepth: 4
+  sortrefs: yes
+  symrefs: yes
+
+author:
+ -
+   ins: P. Hoffman
+   name: Paul Hoffman
+   org: ICANN
+   email: paul.hoffman@icann.org
+
+normative:
+  I-D.ietf-doh-dns-over-https:
+  RFC1035:
+  RFC2119:
+  RFC6570:
+  RFC8174:
+
+informative:
+  RFC6761:
+  RFC6891:
+  RFC7858:
+
+--- abstract
+
+Some clients will want to know if there are one or more DoH servers
+associated with the DNS recursive resolver that the client is already using.
+This document describes a protocol for a resolver to tell a client
+what its associated DoH servers are.
+
+--- middle
+
+# Introduction
+
+DoH {{I-D.ietf-doh-dns-over-https}} requires that one or more DoH servers be configured
+for the DoH client. That document does not say how the DoH servers are
+found, nor how to select from a list of possible DoH servers,
+nor what the user interface (UI) for the configuration should be.
+
+There is a use case for clients who have one or more currently-configured 
+DNS recursive resolvers wanting to use DoH for DNS resolution instead.
+Clients typically configure their DNS recursive resolvers with through manual
+configuration (such as manually editing a /etc/named.conf file) or through
+automatic configuration from a protocol such as DHCP.
+
+The client that wants to change from its currently-configured DNS recursive
+resolvers might be the stub resolver in an operating system, although at this
+time it is rare that such stub resolvers can use DoH.
+A much more likely use case is a web browser that is getting name resolution
+through the stub resolver on the computer on which it is running.
+The user of the browser might have a preference for using a DoH server,
+and it might want a DoH server that is associated with the resolver that the
+computer is currently using.
+
+To address this use case, this document defines a new RRtype and describes
+how it is used. The design choices made are described in {{design_choices}}.
+
+# Terminology
+
+In this document, "DoT" is used to indicate DNS over TLS as defined in {{RFC7858}}.
+
+In this document, "Do53" is used to indicate DNS over UDP or TCP as defined in {{RFC1035}}.
+
+"DoH client" and "DoH server" are defined in {{I-D.ietf-doh-dns-over-https}}.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY",
+and "OPTIONAL" in this document are to be interpreted as described in
+BCP 14 {{RFC2119}} {{RFC8174}} when, and only when, they
+appear in all capitals, as shown here.
+
+# RAD RRtype Description {#rrdesc}
+
+The mnemonic for the new RRtype is RAD (for "router associated
+DoH"). The Type value for the RAD RR is TBD; see {{ianacons}}.
+
+The RDATA of the resource record consists of one field: a URI Template
+{{RFC6570}} that is enclosed in ASCII quotation marks.
+
+The display format of the RDATA is simply the value of the RDATA. For example,
+here is an example RAD RRset in the display format:
+
+~~~
+. 3600 IN RAD "https://dnsserver.example.net/dns-query{?dns}"
+. 3600 IN RAD "https://192.0.2.78/doh{?dns}"
+~~~
+
+The wire format of the RDATA is simply the bytes that represent the RDATA,
+including the required enclosing quotation marks. For example, the above
+RRset is encoded as follows (with the example value for TBD being 42424
+decimal, or 0xA5B3):
+
+~~~
+00 A5B3 0001 00000E10 002F 
+2268747470733A2F2F646E737365727665722E6578616D706C652E6E6574
+2F646E732D71756572797B3F646E737D22
+00 A5B3 0001 00000E10 001E
+2268747470733A2F2F3139322E302E322E37382F646F687B3F646E737D22
+~~~
+
+# Use of RAD
+
+To find the DoH servers associated with a resolver, the client
+sends that resolver a query for the root zone in class IN with the RRtype of
+RAD (that is, the query is ./IN/RAD).
+The server replies with its associated DoH servers in the RAD RRset
+in the Answer section.
+
+## Server Use of RAD
+
+A resolver that understands this protocol MUST send a RAD RRset in the Answer
+section.
+If a resolver that understands this protocol has no associated DoH servers,
+the RRset contains exactly one record that has just "" as the RDATA; that is,
+the RDLENGTH in that record is 2, and the RDATA contains just the two bytes
+0x2222.
+
+## Client Use of RAD
+
+If a client sends the ./IN/RAD query over a transport that assures data
+integrity (such as DoT), and it receives a response that has an NXDOMAIN
+response code, the client can assume that the resolver does not know this
+protocol.
+
+See {{seccons}} for warnings about sending the ./IN/RAD query over a transport that
+does not assure data integrity (such as Do53).
+
+This protocol only defines the use of the RAD RRtype in queries that
+are exactly ./IN/RAD.
+Clients MUST NOT send DNS queries using the RAD RRtype with any QNAME
+other than that of the root and any QCLASS other than IN.
+
+The client SHOULD only use a DoH server listed in the RAD response for the length
+of time listed as the RAD RRset's TTL.
+Using an associated DoH server beyond the TTL can expose the client to problems such as
+loss of DNS service.
+The client SHOULD send a ./IN/RAD query before the expiration of the TTL in a previous
+response in order to allow the client to continue to use an associated DoH server without
+interruption.
+
+A client MUST issue a new ./IN/RAD query every time the configured resolver changes.
+
+# Design Choices {#design_choices}
+
+The primary use case for this protocol is a web browser that is getting name
+resolution through the stub resolver on the computer on which it is running
+wanting to switch its name resolution to DoH.
+A secondary use case is an OS that wants to make a similar switch.
+
+An earlier design suggestion was to use DHCP to tell the OS the DoH servers that
+the stub resolver might use. That protocol is orthogonal to the one in this document
+in that it addresses a different use case. If both the protocol in this document and
+a DHCP-based protocol come into existence, they could co-exist. However, there is
+no current mechanism for a stub resolver to tell a web browser what DoH server
+the stub resolver is using, so DoH configuration in the stub resolver would not
+prevent the browser from trying to find a DoH server on its own.
+
+An earlier design suggestion was to use an EDNS0 {{RFC6891}} extension. 
+The design chosen (the new RRtype and ./IN/RAD query) meets the use case better because if
+the stub resolver does not understand EDNS0, or there is a middlebox between the computer
+and the resolver that mishandles EDNS extensions, the information will not make it back to
+the web browser.
+
+An earlier design suggestion was to use a new special-use TLD {{RFC6761}} instead of
+the root in the query. However, {{RFC6761}} continues to be contentious and using
+such a TLD has pretty much all of the problems as using the root itself.
+
+For this protocol to be useful in a browser, the browser needs to have an entry in
+its configuration interface where the allowed DoH servers are listed that indicates
+that a DoH server from the configured Do53 or DoT resolver is allowed. That wording
+might say something like "DoH server associated with my current resolver".
+
+<!--
+(or "servidor DoH asociado con mi resolución actual" or
+"serveur DoH associé à mon résolveur actuel").
+-->
+
+# IANA Considerations {#ianacons}
+
+## Root Zone
+
+IANA MUST NOT ever include an RRset for the RAD RRtype in the root zone.
+
+## Registration for RAD RRtype
+
+@@@ This will actually be a submission to the RRtypes expert sometime during
+the progress of this draft (if this draft progresses), and then will turn
+into a stub section just saying "IANA assigned Type value X to RAD in the
+RRtypes registry". @@@
+
+A. Submission Date: (sometime in the future)
+
+B.1 Submission Type:
+
+New RRTYPE
+
+B.2 Kind of RR:
+
+Data RR
+
+C. Contact Information for submitter (will be publicly posted):
+
+Paul Hoffman, paul.hoffman@icann.org
+
+D. Motivation for the new RRTYPE application
+
+To support recursive resolvers who want to associate DoH servers
+with the resolvers
+
+E. Description of the proposed RR type.
+
+See {{rrdesc}}
+
+F. What existing RRTYPE or RRTYPEs come closest to filling that need
+and why are they unsatisfactory?
+
+URI, but it is unsatisfactory because the semantics are different
+(This is not associating the URI with a hostname) and because it has
+a priority and weight.
+
+G. What mnemonic is requested for the new RRTYPE (optional)?
+
+RAD
+
+H. Does the requested RRTYPE make use of any existing IANA registry
+or require the creation of a new IANA subregistry in DNS
+Parameters?
+
+No
+
+I. Does the proposal require/expect any changes in DNS
+servers/resolvers that prevent the new type from being processed
+as an unknown RRTYPE (see \[RFC3597\])?
+  
+No
+
+J. Comments:
+
+None
+
+# Privacy Considerations {#privconsid}
+
+Allowing a user to use DoH instead of Do53 increases communication privacy because
+of the TLS protection.
+
+When a Do53 or DoT server indicates that a particular DoH server is associated with it,
+the client might assume that the DoH server has the same information privacy policies as
+the Do53 or DoT server.
+Therefore, a Do53 or DoT server SHOULD NOT recommend a DoH server unless that DoH server
+has the same (or better) information privacy policy as the Do53 or DoT server.
+
+# Security Considerations {#seccons}
+
+If a client sends the ./IN/RAD query over a transport that does not assure
+data integrity (such as Do53), an attacker between the client and the resolver
+can change the response.
+
+*  A client who sends a query over such a transport and begins to use
+a DoH server based on the response MUST NOT assign a level of trust to that
+DoH server greater than to the trust it gave to the resolver itself.
+
+*  A client who sends a query over such a transport and receives a response
+that has an NXDOMAIN response code cannot be sure that the response comes from
+a resolver that does not know this protocol.
+Instead, the client SHOULD assume that there could be an on-path attack where
+the attacker does not want the client to use DoH.
+
+--- back
+
+# Acknowledgments
+{:numbered="false"}
+
+The use case in this document was inspired by discussions and the DRIU BoF
+at IETF 102 and later in the DNSOP Working Group.
