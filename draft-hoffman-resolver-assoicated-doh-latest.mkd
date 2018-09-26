@@ -39,8 +39,10 @@ informative:
 
 --- abstract
 
-Some clients will want to know if there are one or more DoH servers
+Browsers and web applications may want to know if there are one or more DoH servers
 associated with the DNS recursive resolver that the client is already using.
+This would allow them to get DNS responses from a resolver that the user
+(or, more likely, the user's network administrator) has already chosen.
 This document describes a protocol for a resolver to tell a client
 what its associated DoH servers are.
 
@@ -53,25 +55,28 @@ for the DoH client. That document does not say how the DoH servers are
 found, nor how to select from a list of possible DoH servers,
 nor what the user interface (UI) for the configuration should be.
 
-There is a use case for clients who have one or more currently-configured 
+There is a use case for browsers and web applications who have one or more currently-configured 
 DNS recursive resolvers wanting to use DoH for DNS resolution instead.
-Clients typically configure their DNS recursive resolvers with through manual
+For example, the recursive resolver knows how to give correct answers to DNS
+queries that contain names that are only resolvable in the local context.
+Users typically configure their DNS recursive resolvers with through manual
 configuration (such as manually editing a /etc/named.conf file) or through
 automatic configuration from a protocol such as DHCP.
 
 The client that wants to change from its currently-configured DNS recursive
 resolvers might be the stub resolver in an operating system, although at this
 time it is rare that such stub resolvers can use DoH.
-A much more likely use case is a web browser that is getting name resolution
+A much more likely use case is a browser or web application that is getting name resolution
 through the stub resolver on the computer on which it is running.
 The user of the browser might have a preference for using a DoH server,
-and it might want a DoH server that is associated with the resolver that the
-computer is currently using.
+and they might need to use a DoH server that is associated with the resolver that the
+computer is currently using so that its queries for non-global names are answered correctly.
+They may also be required to use only resolvers that are approved by their organization's
+network operators.
 
-To address this use case, this document defines a new
-special use domain name "resolver-associated-doh.arpa."
-and describes
-how it is used. The design choices made are described in {{design_choices}}.
+To address this use case, this document defines a new special use domain name
+"resolver-associated-doh.arpa." and describes how it is used. The design choices made are
+described in {{design_choices}}.
 
 # Terminology
 
@@ -99,8 +104,7 @@ TXT RRset in the Answer section.
 
 ## Signalling in the Resolver
 
-A resolver that understands this protocol MUST send a TXT RRset in the Answer
-section.
+A resolver that understands this protocol MUST send a TXT RRset in the Answer section.
 Each TXT record contains one URI Template.
 
 If a resolver that understands this protocol has no associated DoH servers, the TXT RRset
@@ -108,7 +112,7 @@ contains exactly one record that has an empty string as the RDATA; that is, the 
 in that record is 1, and the RDATA contains just the byte 0x00.
 
 Note that the zone resolver-associated-doh.arpa, as it is delegated in {{ianacons}}, has
-no TXT records. The resolver adds its own TXT records to the answer.
+no TXT records of its own. The resolver adds its own TXT records to the answer.
 
 ## Client Handling of the Signals
 
@@ -136,11 +140,11 @@ of the TTL in a previous response in order to allow the client to continue to us
 associated DoH server without interruption.
 
 A client MUST issue a new resolver-associated-doh.arpa/IN/TXT query every time the
-configured resolver changes.
+configured resolver in the operating system changes.
 
 # Design Choices {#design_choices}
 
-The primary use case for this protocol is a web browser that is getting name
+The primary use case for this protocol is a browser or web application that is getting name
 resolution through the stub resolver on the computer on which it is running
 wanting to switch its name resolution to DoH.
 A secondary use case is an OS that wants to make a similar switch.
@@ -152,16 +156,16 @@ validate DNSSEC.
 An earlier design suggestion was to use DHCP to tell the OS the DoH servers that
 the stub resolver might use. That protocol is orthogonal to the one in this document
 in that it addresses a different use case. If both the protocol in this document and
-a DHCP-based protocol come into existence, they could co-exist. However, there is
-no current mechanism for a stub resolver to tell a web browser what DoH server
+a DHCP-based protocol are standardized, they could co-exist. However, there is
+no current mechanism for a stub resolver to tell a browser, or a web application, what DoH server
 the stub resolver is using, so DoH configuration in the stub resolver would not
 prevent the browser from trying to find a DoH server on its own.
 
 An earlier design suggestion was to use an EDNS0 {{RFC6891}} extension. 
 The design chosen (the new RRtype and resolver-associated-doh.arpa/IN/TXT query) meets the
 use case better because if the stub resolver does not understand EDNS0, or there is a
-middlebox between the computer and the resolver that mishandles EDNS extensions, the
-information will not make it back to the web browser.
+middlebox that mishandles EDNS extensions between the computer and the resolver, the
+information about associated DoH servers will not make it back to the browser or web application.
 
 For this protocol to be useful in a browser, the browser needs to have an entry in
 its configuration interface where the allowed DoH servers are listed that indicates
@@ -182,12 +186,15 @@ IANA will record the domain name "resolver-associated-doh.arpa." in the
 IANA, with the approval of the IAB, will delegate "resolver-associated-doh.arpa." in the
 ".arpa." zone.
 
-This delegation MUST NOT include a DS record.
+The delegation for "resolver-associated-doh.arpa."
+MUST NOT include a DS record.
 
-This delegation MUST point to one or more black hole servers, for example,
+The delegation for "resolver-associated-doh.arpa."
+MUST point to one or more black hole servers, for example,
 "blackhole-1.iana.org." and "blackhole-2.iana.org.".
 
-This delegation MUST NOT ever have a resource record with the RRtype "TXT".
+The delegation for "resolver-associated-doh.arpa."
+MUST NOT ever have a resource record with the RRtype "TXT".
 
 
 # Privacy Considerations {#privconsid}
@@ -207,11 +214,11 @@ If a client sends the resolver-associated-doh.arpa/IN/TXT query over a transport
 not assure data integrity (such as Do53), an attacker between the client and the resolver
 can change the response.
 
-*  A client who sends a query over such a transport and begins to use a DoH server based
+*  A client that sends a query over such a transport and begins to use a DoH server based
 on the response MUST NOT assign a level of trust to that DoH server greater than to the
 trust it gave to the resolver itself.
 
-*  A client who sends a query over such a transport and receives a response that has an
+*  A client that sends a query over such a transport and receives a response that has an
 NXDOMAIN response code cannot be sure that the response comes from a resolver that does
 not know this protocol.
 Instead, the client SHOULD assume that there could be an on-path attack where the attacker
@@ -224,3 +231,5 @@ does not want the client to use DoH.
 
 The use case in this document was inspired by discussions and the DRIU BoF
 at IETF 102 and later in the DNSOP Working Group.
+Vladimír Cunat, Philip Homburg, and Shumon Huque offered useful advice
+to greatly improve the protocol. 
