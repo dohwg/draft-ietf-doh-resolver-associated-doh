@@ -26,7 +26,9 @@ normative:
   I-D.nottingham-rfc5785bis:
   RFC1035:
   RFC2119:
+  RFC2818:
   RFC6570:
+  RFC7435:
   RFC7858:
   RFC8174:
   RFC8484:
@@ -58,6 +60,7 @@ nor what the user interface (UI) for the configuration should be.
 
 There is a use case for browsers and web applications who have one or more currently-configured 
 DNS recursive resolvers wanting to use DoH for DNS resolution instead.
+(In the rest of this document "browsers and web applications" are just called "applications".)
 For example, the recursive resolver knows how to give correct answers to DNS
 queries that contain names that are only resolvable in the local context.
 Users typically configure their DNS recursive resolvers with through manual
@@ -68,9 +71,9 @@ The client that wants to change from its currently-configured Do53 recursive
 resolver(s) to one or more DoH servers
  might be the stub resolver in an operating system, although at this
 time it is rare that such stub resolvers can use DoH.
-A much more likely use case is a browser or web application that is getting name resolution
+A much more likely use case is an application that is getting name resolution
 through the stub resolver on the computer on which it is running.
-The user of the browser might have a preference for using a DoH server,
+The user of the application might have a preference for using a DoH server,
 and they might need to use a DoH server that is associated with the resolver that the
 computer is currently using so that its queries for non-global names are answered correctly.
 They may also be required to use only resolvers that are approved by their organization's
@@ -83,10 +86,17 @@ use the POSIX "getaddrinfo()" function and resolve HTTP and HTTPS URLs to get a 
 of the DoH servers associated with at least one of the resolvers being used by the operating system
 on the system on which the application is being run.
 
+It is important to note that using a DoH server based on the protocol defined in this document 
+will currently result in communicating with opportunistic encryption {{RFC7435}} using
+"unauthenticated, encrypted communication" instead of "authenticated, encrypted communication".
+This is covered in more detail in {{seccons}}.
+
 The design choices for this protocol, particularly earlier designs that were
 deemed unusable, are described in {{design_choices}}.
 
 # Terminology
+
+In this document, the combination of "browsers and web applications" is just called "applications".
 
 In this document, "DoT" is used to indicate DNS over TLS as defined in {{RFC7858}}.
 
@@ -107,38 +117,59 @@ a special use domain name that causes a resolver to return its IP addresses.
 It uses those IP addresses as part of a well-known URI to find out the URI templates {{RFC6570}}
 to use for the DoH server(s) associated with the resolver.
 
-## Finding the IP Addresses of a Resolver
+## Step 1: Finding the IP Addresses of a Resolver {#find_ip}
 
-A browser is able to use the POSIX "getaddrinfo()" function to convert host names into
+An application is able to use the POSIX "getaddrinfo()" function to convert host names into
 IP addresses through the stub resolver in the operating system on which it is running.
 It can also send queries to a resolver, but it would need to have the address of that resolver first.
-The same is true for web applications.
 
-In order for a browser (or other application) to find the address of the resolver that the
+In order for an application to find the address of the resolver that the
 operating system is using, it uses the POSIX "getaddrinfo()" function (or some equivalent)
 with the special use name "resolver-addresses.arpa".
 When a resolver that understands this special use domain name receives a query for either
 resolver-addresses.arpa/IN/A or resolver-addresses.arpa/IN/AAAA,
 it returns its own IP addresses in the answer.
 
-## Finding the DoH Servers Associated with a Resolver
+## Step 2: Finding the DoH Servers Associated with a Resolver {#find_associated}
 
 To find the DoH servers associated with a resolver, the client uses the addresses
-returned from the query to resolver-addresses.arpa and sends a query to
+returned from the query to resolver-addresses.arpa and sends a query to:
 
 ~~~
-https://IPADDRESSGOESHERE/.well-known/doh-servers-associated/
+https://ADDRESS/.well-known/doh-servers-associated/
 ~~~
 
-The resolver replies with its associated DoH servers as URI Templates {{RFC6570}}.
+where "ADDRESS" is an IP address discovered in {{find_ip}}. 
 
-\[\[ Need to describe the media types; likely JSON \]\]
+The resolver replies with a list of its associated DoH servers as URI Templates {{RFC6570}}.
 
-\[\[ Need to talk about what a response with an empty list means \]\]
+\[\[ Need to describe the media type; likely JSON; and the list specifics. \]\]
 
-\[\[ Need to talk about what happens if authentication fails. This is complicated
-by the fact that the application doesn't know if the OS-to-resolver communication
-is authenticated. \]\]
+Note that the well-known URL above uses the HTTPS scheme and no port number.
+A resolver using the protocol defined in this document MUST provide HTTP over TLS
+on port 443 as defined in {{RFC2818}}.
+
+A resolver that implements this protocol but has no DoH servers associated with it
+returns an empty list.
+
+The result of {{find_ip}} may be a list of more than one IP addresses.
+This document does not define a way for an application to choose between
+multiple IP addresses.
+For example, the application might try all the IP addresses, or try them in random
+order until it gets a result, and so on.
+
+The result of resolving the well-known URI can be a list of more than one URI
+templates, possibly pointing resources in very different places on the Internet.
+This document does not define a way for the application to choose which DoH servers
+to use if presented with multiple choices.
+
+An application that is willing to use opportunistic encryption as defined in {{RFC7435}}
+MAY ignore authentication failures when resolving the well-known URL.
+
+An application that is not willing to use opportunistic encryption as defined in {{RFC7435}}
+MUST NOT ignore authentication failures when going to the well-known URL.
+However, as described in {{seccons}}, such an application is unlikely to be able to exist
+today.
 
 \[\[ Need to talk about HTTP caching \]\]
 
@@ -148,20 +179,18 @@ a resolver every time the configured resolver in the operating system changes.
 
 # User Interface
 
-For this protocol to be useful in a browser, the browser needs to have an entry in
+For this protocol to be useful in an application, the application needs to have an entry in
 its configuration interface where the allowed DoH servers are listed that indicates
 that a DoH server from the configured Do53 or DoT resolver is allowed. That wording
 might say something like "DoH server associated with my current resolver".
 
-<!--
-(or "servidor DoH asociado con mi resolución actual" or
-"serveur DoH associé à mon résolveur actuel").
--->
+This is a place where browsers and web applications are different.
+Most browsers have configuration interfaces, while most web applications do not.
 
 
 # Design Choices {#design_choices}
 
-The primary use case for this protocol is a browser or web application that is getting name
+The primary use case for this protocol is an application that is getting name
 resolution through the stub resolver on the computer on which it is running
 wanting to switch its name resolution to DoH.
 A secondary use case is an OS that wants to make a similar switch.
@@ -174,9 +203,9 @@ An earlier design suggestion was to use DHCP to tell the OS the DoH servers that
 the stub resolver might use. That protocol is orthogonal to the one in this document
 in that it addresses a different use case. If both the protocol in this document and
 a DHCP-based protocol are standardized, they could co-exist. However, there is
-no current mechanism for a stub resolver to tell a browser, or a web application, what DoH server
+no current mechanism for a stub resolver to tell an application what DoH server
 the stub resolver is using, so DoH configuration in the stub resolver would not
-prevent the browser from trying to find a DoH server on its own.
+prevent the application from trying to find a DoH server on its own.
 
 An earlier design suggestion was to use an EDNS0 {{RFC6891}} extension. 
 The design chosen in this document meets the use case better because applications cannot
@@ -200,11 +229,14 @@ IANA MUST NOT delegate resolver-addresses.arpa in the .arpa zone.
 
 # Privacy Considerations {#privconsid}
 
-Allowing a user to use DoH instead of Do53 increases communication privacy because
-of the TLS protection.
+Allowing an application to use DoH instead of Do53 increases communication privacy because
+of the TLS protection, even if that communication is unauthenticated.
+If the communication is unauthenticated (which it will be using current technologies; see
+{{seccons}}), the communication between the application and the DoH server to be private
+from anyone other than a on-path attacker.
 
 When a Do53 or DoT server indicates that a particular DoH server is associated with it,
-the client might assume that the DoH server has the same information privacy policies as
+the application might assume that the DoH server has the same information privacy policies as
 the Do53 or DoT server.
 Therefore, a Do53 or DoT server SHOULD NOT recommend a DoH server unless that DoH server
 has the same (or better) information privacy policy as the Do53 or DoT server.
@@ -212,12 +244,25 @@ has the same (or better) information privacy policy as the Do53 or DoT server.
 
 # Security Considerations {#seccons}
 
-There is currently no way for an application to know whether the operating system's stub
-resolver is using a transport that assures data integrity such as DoT. 
+{{RFC7435}} defines "unauthenticated, encrypted communication" and "authenticated, encrypted communication".
+Those definitions make it clear that authentication is needed in every step in order
+to consider communication authenticated and encrypted.
 
-Even is an application could determine the use of a transport like DoT, the application
-would also need to know whether the transport was authenticated or was simply chosen
-opportunistically.
+There is currently no way for an application to know whether the operating system's stub
+resolver is using a transport that assures data integrity such as DoT.
+This means that the protocol in {{find_ip}} is not authenticated.
+In the future, such a signal might be defined and deployed, but until then,
+the lack of assurance of authentication in the first step of this protocol (getting the resolver's IP address)
+means that the result will always be unauthenticated.
+
+Even is an application could determine the use of a transport like DoT for {{find_ip}}, the application
+would also need to know whether the transport was authenticated or was simply chosen opportunistically.
+Thus, if in the future, a signal about the DNS transport being used by the stub resolver might be defined and deployed,
+that signal would also have to specify if the transport is also authenticated.
+
+The protocol defined in {{find_associated}} explicitly allows ignoring the authentication of
+the results of resolving the well-known URI.
+Doing so of course causes the result to be unauthenticated, encrypted communication.
 
 --- back
 
