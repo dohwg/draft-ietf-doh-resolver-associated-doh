@@ -99,6 +99,16 @@ associated DoH server without interruption.
 A client MUST issue a new resolver-associated-doh.arpa/IN/TXT query every time the
 configured resolver in the operating system changes.
 
+=========
+
+Resolver address is supposed to be its own address, but well-known URI might point other places
+
+If a client has some OS-specific way to enumerate the DNS server IPs for the default network interface, it does not need to perform "Step 1".
+
+if the application can enumerate the OS's preferred DoH servers, there is no need to use the protocol here at all
+
+I think interaction with DoT is worth discussing here, even though it's probably trivial.  If I can probe for DoT and (with this draft) DoH, which one do I probe first, and which should I prefer if both succeed?
+
 -->
 
 # Introduction
