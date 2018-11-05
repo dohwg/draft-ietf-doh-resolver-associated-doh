@@ -44,60 +44,12 @@ Browsers and web applications may want to know if there are one or more DoH serv
 associated with the DNS recursive resolver that the operating system is already using.
 This would allow them to get DNS responses from a resolver that the user
 (or, more likely, the user's network administrator) has already chosen.
-This document describes a protocol for a resolver to tell a client
+This document describes two protocols for a resolver to tell a client
 what its associated DoH servers are.
 
 --- middle
 
 <!-- NEW STUFF TO ADD
-
-To address this use case, this document defines a new special use domain name
-"resolver-associated-doh.arpa." and describes how it is used. The design choices made are
-described in {{design_choices}}.
-
-To find the DoH servers associated with a resolver, the client
-sends that resolver a query for resolver-associated-doh.arpa
-in class IN with the RRtype of TXT {{RFC1035}}
-(that is, the query is resolver-associated-doh.arpa/IN/TXT).
-
-The resolver replies with its associated DoH servers as URI Templates {{RFC6570}} in the
-TXT RRset in the Answer section.
-
-A resolver that understands this protocol MUST send a TXT RRset in the Answer section.
-Each TXT record contains one URI Template.
-
-If a resolver that understands this protocol has no associated DoH servers, the TXT RRset
-contains exactly one record that has an empty string as the RDATA; that is, the RDLENGTH
-in that record is 1, and the RDATA contains just the byte 0x00.
-
-Note that the zone resolver-associated-doh.arpa, as it is delegated in {{ianacons}}, has
-no TXT records of its own. The resolver adds its own TXT records to the answer.
-
-The client uses the TXT records in the response to the resolver-associated-doh.arpa/IN/TXT
-query as a list of the URI Templates of the DoH servers associated with the resolver.
-Note that TXT records can contain multiple "character-strings" {{RFC1035}}; for this
-protocol, all characters-strings in a TXT record are concatenated to form a single URI
-Template.
-
-If a client sends the resolver-associated-doh.arpa/IN/TXT query over a transport that
-assures data integrity (such as DoT), and it receives a response that has the RCODE set to
-NOERROR and no relevant answers in the Answer section (also called a "NODATA" response in
-{{RFC2308}}), the client can assume that the resolver does not know this protocol.
-
-See {{seccons}} for warnings about sending the resolver-associated-doh.arpa/IN/TXT query
-over a transport that does not assure data integrity (such as Do53).
-
-The client SHOULD only use a DoH server listed in the response to
-resolver-associated-doh.arpa/IN/TXT for the length of time listed as the TXT RRset's TTL
-field.
-Using an associated DoH server beyond the TTL can expose the client to problems such as
-loss of DNS service.
-The client SHOULD send a resolver-associated-doh.arpa/IN/TXT query before the expiration
-of the TTL in a previous response in order to allow the client to continue to use an
-associated DoH server without interruption.
-
-A client MUST issue a new resolver-associated-doh.arpa/IN/TXT query every time the
-configured resolver in the operating system changes.
 
 =========
 
@@ -138,17 +90,30 @@ computer is currently using so that its queries for non-global names are answere
 They may also be required to use only resolvers that are approved by their organization's
 network operators.
 
-To address these use cases, this document defines a new special use domain name
-(described in {{RFC6761}}) and a well-known URI {{I-D.nottingham-rfc5785bis}}.
-When combined, they allow an application that can
-use the POSIX "getaddrinfo()" function and resolve HTTP and HTTPS URLs to get a list
-of the DoH servers associated with at least one of the resolvers being used by the operating system
-on the system on which the application is being run.
+To address these use cases, this document defines two different protocols to
+get the list of URI templates {{RFC6570}} associated for the DoH servers associated with
+at least one of the resolvers being used by the operating system on the
+system on which the application is being run. Each uses its onw special use
+domain name (SUDN); SUDNs aredescribed in {{RFC6761}}.
+
+*  The first, called "DoH servers by TXT" and described in {{doh_by_txt}},
+is a new SUDN that can be queried for a TXT
+RRset. This protocol is most likely useful only to browsers that can call
+operating system functions that in turn query the DNS for text records; web
+applications can only query for IP addresses.
+
+* The second, called "DoH servers by Addresses" and described in {{doh_by_addresses}}
+is combination of a new SUDN that that can
+be queried for IP addresses, and a well-known URI
+{{I-D.nottingham-rfc5785bis}} that can be resolved to return the URI
+templates. This protocol is useful for a browser or web application that can
+query for the addressess associated with a domain name (such as using the
+POSIX "getaddrinfo()" function) and resolve HTTP and HTTPS URLs.
 
 The design choices for this protocol, particularly earlier designs that were
 deemed unusable, are described in {{design_choices}}.
 
-# Terminology
+## Terminology
 
 In this document, "DoT" is used to indicate DNS over TLS as defined in {{RFC7858}}.
 
@@ -162,28 +127,60 @@ and "OPTIONAL" in this document are to be interpreted as described in
 BCP 14 {{RFC2119}} {{RFC8174}} when, and only when, they
 appear in all capitals, as shown here.
 
-# Finding the DoH Servers Associated with a Resolver
+# Finding the URI Templates of the DoH Servers Associated with a Resolver
+
+A client (a browser or web application) uses either the protocol in {{doh_by_txt}} or {{doh_by_addresses}} to get
+a list of URI templates for the DoH servers associated with a resolver. The following sub-sections describe
+the protocols and have notes that are common to both protocols.
+
+## DoH Servers by TXT {#doh_by_txt}
+
+To find the DoH Servers associated with a resolver, an application
+sends that resolver a query for "resolver-associated-doh.arpa"
+in class IN with the RRtype of TXT {{RFC1035}}
+(that is, the query is resolver-associated-doh.arpa/IN/TXT).
+
+The resolver replies with its associated DoH servers as URI templates in the
+TXT RRset in the Answer section.
+
+A resolver that understands this protocol MUST send a TXT RRset in the Answer section.
+Each TXT record contains one URI template.
+If a resolver that understands this protocol has no associated DoH servers, the TXT RRset
+contains exactly one record that has an empty string as the RDATA; that is, the RDLENGTH
+in that record is 1, and the RDATA contains just the byte 0x00.
+
+As described in {{ianacons}}, the zone resolver-associated-doh.arpa is not
+delegated. The resolver acts as if it is and adds its own TXT records to the answer.
+
+The client uses the TXT records in the response to the resolver-associated-doh.arpa/IN/TXT
+query as a list of the URI templates of the DoH servers associated with the resolver.
+Note that TXT records can contain multiple "character-strings" {{RFC1035}}; for this
+protocol, all characters-strings in a TXT record are concatenated to form a single URI
+template.
+
+## DoH Servers by Addresses {#doh_by_addresses}
 
 To find the DoH Servers associated with a resolver, an application uses
-a special use domain name that causes a resolver to return its IP addresses.
+a SUDN that causes a resolver to return its IP addresses.
 It uses those IP addresses as part of a well-known URI to find out the URI templates {{RFC6570}}
 to use for the DoH server(s) associated with the resolver.
 
-## Finding the IP Addresses of a Resolver
+### Finding the IP Addresses of a Resolver
 
-A browser is able to use the POSIX "getaddrinfo()" function to convert host names into
+A browser is able to use an operating system function such as gethostbyname() to convert host names into
 IP addresses through the stub resolver in the operating system on which it is running.
-It can also send queries to a resolver, but it would need to have the address of that resolver first.
-The same is true for web applications.
+It can also send HTTPS queries to a resolver, but it would need to have the address of that resolver first.
+Web applications can do the same.
 
-In order for a browser (or other application) to find the address of the resolver that the
-operating system is using, it uses the POSIX "getaddrinfo()" function (or some equivalent)
-with the special use name "resolver-addresses.arpa".
-When a resolver that understands this special use domain name receives a query for either
+For this protocol, the browser or web application uses the SUDN "resolver-addresses.arpa".
+When a resolver that understands this SUDN receives a query for either
 resolver-addresses.arpa/IN/A or resolver-addresses.arpa/IN/AAAA,
 it returns its own IP addresses in the answer.
 
-## Finding the DoH Servers Associated with a Resolver
+As described in {{ianacons}}, the zone resolver-addresses.arpa is not
+delegated.The resolver acts as if it is and adds its own A or AAAA records to the answer.
+
+### Finding the DoH Servers Associated with a Resolver
 
 To find the DoH servers associated with a resolver, the client uses the addresses
 returned from the query to resolver-addresses.arpa and sends a query to
@@ -192,7 +189,7 @@ returned from the query to resolver-addresses.arpa and sends a query to
 https://IPADDRESSGOESHERE/.well-known/doh-servers-associated/
 ~~~
 
-The resolver replies with its associated DoH servers as URI Templates {{RFC6570}}.
+The resolver replies with its associated DoH servers as URI templates {{RFC6570}}.
 
 \[\[ Need to describe the media types; likely JSON \]\]
 
@@ -207,19 +204,33 @@ is authenticated. \]\]
 A client MUST try to establish a new list of DoH servers associated with
 a resolver every time the configured resolver in the operating system changes.
 
+## Issues Common to "DoH Servers by TXT" and "DoH Servers by Addresses"
 
-# User Interface
+See {{seccons}} for warnings about sending the DNS queries
+over a transport that does not assure data integrity (such as Do53),
+and over a transport that does assure data integrity (such as DoT) but
+in circumstances where the browser or web application doesn't know the
+type of DNS transport being used.
+
+A client MUST re-issue the queries in {#doh_by_txt} and {#doh_by_addresses}
+every time the configured resolver in the operating system changes.
+
+\[\[ What if there is a list of DoH servers? Pick one (how?) or jump arond? \]\]
+
+## Choosing Between "DoH Servers by TXT" and "DoH Servers by Addresses"
+
+\[\[ by TXT only takes one step \]\]
+
+\[\[ by address gives you all the addressess, which might yield more servers \]\]
+
+## User Interface
 
 For this protocol to be useful in a browser, the browser needs to have an entry in
 its configuration interface where the allowed DoH servers are listed that indicates
 that a DoH server from the configured Do53 or DoT resolver is allowed. That wording
-might say something like "DoH server associated with my current resolver".
-
-<!--
+might say something like "DoH server associated with my current resolver"
 (or "servidor DoH asociado con mi resolución actual" or
 "serveur DoH associé à mon résolveur actuel").
--->
-
 
 # Design Choices {#design_choices}
 
@@ -244,15 +255,14 @@ An earlier design suggestion was to use an EDNS0 {{RFC6891}} extension.
 The design chosen in this document meets the use case better because applications cannot
 communicate EDNS0 extensions to the stub resolver.
 
-An earlier design suggestion used a special use domain name of resolver-associated-doh.arpa
-with an RRtype of TXT.
-The design chosen in this document meets the use case better because applications cannot
-query the stub resolver for types other than address records.
-
 
 # IANA Considerations {#ianacons}
 
-IANA will record the domain name "resolver-addresses.arpa." in the
+IANA will record the domain name "resolver-associated-doh.arpa" in the
+"Special-Use Domain Names" registry {{SUDN}}.
+IANA MUST NOT delegate resolver-associated-doh.arpa in the .arpa zone.
+
+IANA will record the domain name "resolver-addresses.arpa" in the
 "Special-Use Domain Names" registry {{SUDN}}.
 IANA MUST NOT delegate resolver-addresses.arpa in the .arpa zone.
 
@@ -288,5 +298,7 @@ opportunistically.
 
 The use case in this document was inspired by discussions and the DRIU BoF
 at IETF 102 and later in the DNSOP Working Group.
-Vladimír Cunat, Philip Homburg, and Shumon Huque offered useful advice
-to greatly improve an early version of the protocol. 
+Vladimír Cunat, Philip Homburg, Shumon Huque, Martin Thomson, Eric
+Rescorla, and Tony Finch offered useful advice
+to improve early versions of the protocol. 
+
