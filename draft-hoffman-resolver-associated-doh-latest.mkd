@@ -49,20 +49,6 @@ what its associated DoH servers are.
 
 --- middle
 
-<!-- NEW STUFF TO ADD
-
-=========
-
-Resolver address is supposed to be its own address, but well-known URI might point other places
-
-If a client has some OS-specific way to enumerate the DNS server IPs for the default network interface, it does not need to perform "Step 1".
-
-if the application can enumerate the OS's preferred DoH servers, there is no need to use the protocol here at all
-
-I think interaction with DoT is worth discussing here, even though it's probably trivial.  If I can probe for DoT and (with this draft) DoH, which one do I probe first, and which should I prefer if both succeed?
-
--->
-
 # Introduction
 
 DoH {{RFC8484}} requires that one or more DoH servers be configured
@@ -80,7 +66,7 @@ automatic configuration from a protocol such as DHCP.
 
 The client that wants to change from its currently-configured Do53 recursive
 resolver(s) to one or more DoH servers
- might be the stub resolver in an operating system, although at this
+might be the stub resolver in an operating system, although at this
 time it is rare that such stub resolvers can use DoH.
 A much more likely use case is a browser or web application that is getting name resolution
 through the stub resolver on the computer on which it is running.
@@ -90,25 +76,29 @@ computer is currently using so that its queries for non-global names are answere
 They may also be required to use only resolvers that are approved by their organization's
 network operators.
 
-To address these use cases, this document defines two different protocols to
-get the list of URI templates {{RFC6570}} associated for the DoH servers associated with
+To address these use cases, this document defines three different protocols to
+get the list of URI templates {{RFC6570}} for the DoH servers associated with
 at least one of the resolvers being used by the operating system on the
-system on which the application is being run. Each uses its onw special use
-domain name (SUDN); SUDNs aredescribed in {{RFC6761}}.
+system on which the application is being run.
 
 *  The first, called "DoH servers by TXT" and described in {{doh_by_txt}},
-is a new SUDN that can be queried for a TXT
+is a new special use domain name (SUDN) {{RFC6761}} that can be queried for a TXT
 RRset. This protocol is most likely useful only to browsers that can call
 operating system functions that in turn query the DNS for text records; web
 applications can only query for IP addresses.
 
-* The second, called "DoH servers by Addresses" and described in {{doh_by_addresses}}
-is combination of a new SUDN that that can
-be queried for IP addresses, and a well-known URI
-{{I-D.nottingham-rfc5785bis}} that can be resolved to return the URI
-templates. This protocol is useful for a browser or web application that can
+* The second, called "DoH servers by addresses" and described in {{doh_by_addresses}},
+is a well-known URI
+{{I-D.nottingham-rfc5785bis}} that can be resolved to return the URI templates.
+This is useful if the browser can call operating system functions that will return the address
+of the recursive DNS resolver that the operating system is currently using.
+
+* The third, called "resolver addresses by SUDN" and descrbed in {{resolver_by_sudn}},
+is a new SUDN that that can be queried for
+the IP address(es) of a resolver.
+This protocol is useful for a browser or web application that can
 query for the addressess associated with a domain name (such as using the
-POSIX "getaddrinfo()" function) and resolve HTTP and HTTPS URLs.
+POSIX "getaddrinfo()" function) but cannot use an operating system function to find those addresses.
 
 The design choices for this protocol, particularly earlier designs that were
 deemed unusable, are described in {{design_choices}}.
@@ -140,6 +130,9 @@ sends that resolver a query for "resolver-associated-doh.arpa"
 in class IN with the RRtype of TXT {{RFC1035}}
 (that is, the query is resolver-associated-doh.arpa/IN/TXT).
 
+As described in {{ianacons}}, the zone resolver-associated-doh.arpa is not actually delegated
+and never will be.
+The resolver acts as if it is delegated, and adds its own TXT records to the answer.
 The resolver replies with its associated DoH servers as URI templates in the
 TXT RRset in the Answer section.
 
@@ -149,41 +142,26 @@ If a resolver that understands this protocol has no associated DoH servers, the 
 contains exactly one record that has an empty string as the RDATA; that is, the RDLENGTH
 in that record is 1, and the RDATA contains just the byte 0x00.
 
-As described in {{ianacons}}, the zone resolver-associated-doh.arpa is not
-delegated. The resolver acts as if it is and adds its own TXT records to the answer.
-
 The client uses the TXT records in the response to the resolver-associated-doh.arpa/IN/TXT
 query as a list of the URI templates of the DoH servers associated with the resolver.
 Note that TXT records can contain multiple "character-strings" {{RFC1035}}; for this
 protocol, all characters-strings in a TXT record are concatenated to form a single URI
 template.
 
+The URI templates of the DoH servers associated with a resolver might be hosted
+on the resolver itself, or a resolver hosted by the same operator, or even
+hosted somewhere else. The latter could be used by resolver operators who
+don't want to host DoH servers but trust another operator to do so.
+
 ## DoH Servers by Addresses {#doh_by_addresses}
 
-To find the DoH Servers associated with a resolver, an application uses
-a SUDN that causes a resolver to return its IP addresses.
-It uses those IP addresses as part of a well-known URI to find out the URI templates {{RFC6570}}
+To find the DoH servers associated with a resolver, a browser or web application uses either an operating system function
+(if such a function is available to it) or the process described in {{resolver_by_sudn}}
+to find one or more IP addreses for the resolver.
+It uses one or more of those IP addresses as part of a well-known URI to find out the URI templates {{RFC6570}}
 to use for the DoH server(s) associated with the resolver.
 
-### Finding the IP Addresses of a Resolver
-
-A browser is able to use an operating system function such as gethostbyname() to convert host names into
-IP addresses through the stub resolver in the operating system on which it is running.
-It can also send HTTPS queries to a resolver, but it would need to have the address of that resolver first.
-Web applications can do the same.
-
-For this protocol, the browser or web application uses the SUDN "resolver-addresses.arpa".
-When a resolver that understands this SUDN receives a query for either
-resolver-addresses.arpa/IN/A or resolver-addresses.arpa/IN/AAAA,
-it returns its own IP addresses in the answer.
-
-As described in {{ianacons}}, the zone resolver-addresses.arpa is not
-delegated.The resolver acts as if it is and adds its own A or AAAA records to the answer.
-
-### Finding the DoH Servers Associated with a Resolver
-
-To find the DoH servers associated with a resolver, the client uses the addresses
-returned from the query to resolver-addresses.arpa and sends a query to
+To find the DoH servers associated with a resolver, the client sends a query to
 
 ~~~
 https://IPADDRESSGOESHERE/.well-known/doh-servers-associated/
@@ -204,7 +182,21 @@ is authenticated. \]\]
 A client MUST try to establish a new list of DoH servers associated with
 a resolver every time the configured resolver in the operating system changes.
 
-## Issues Common to "DoH Servers by TXT" and "DoH Servers by Addresses"
+The result of sending this query can be an HTTP redirect to a different server,
+such as when a resolver operator doesn't want to run its own DoH server.
+
+## Resolver Addresses by SUDN {#resolver_by_sudn}
+
+Browsers and web applications are able to use an operating system function such as gethostbyname()
+or its equivalents to convert host names into
+IP addresses through the stub resolver in the operating system on which they are running.
+
+For this protocol, the browser or web application uses the SUDN "resolver-addresses.arpa".
+As described in {{ianacons}}, the zone resolver-addresses.arpa is not actually delegated
+and never will be.
+The resolver acts as if it is delegated, and returns its own A or AAAA records in the answer.
+
+## Issues Common to "DoH Servers by TXT" and "Resolver Addresses by SUDN"
 
 See {{seccons}} for warnings about sending the DNS queries
 over a transport that does not assure data integrity (such as Do53),
@@ -212,18 +204,12 @@ and over a transport that does assure data integrity (such as DoT) but
 in circumstances where the browser or web application doesn't know the
 type of DNS transport being used.
 
-A client MUST re-issue the queries in {#doh_by_txt} and {#doh_by_addresses}
+A client MUST re-issue the queries in {#doh_by_txt} and {#resolver_by_sudn}
 every time the configured resolver in the operating system changes.
 
 \[\[ What if there is a list of DoH servers? Pick one (how?) or jump arond? \]\]
 
-## Choosing Between "DoH Servers by TXT" and "DoH Servers by Addresses"
-
-\[\[ by TXT only takes one step \]\]
-
-\[\[ by address gives you all the addressess, which might yield more servers \]\]
-
-## User Interface
+# User Interface
 
 For this protocol to be useful in a browser, the browser needs to have an entry in
 its configuration interface where the allowed DoH servers are listed that indicates
@@ -237,13 +223,13 @@ might say something like "DoH server associated with my current resolver"
 The primary use case for this protocol is a browser or web application that is getting name
 resolution through the stub resolver on the computer on which it is running
 wanting to switch its name resolution to DoH.
-A secondary use case is an OS that wants to make a similar switch.
+A secondary use case is an operating system that wants to make a similar switch.
 
 An earlier design suggestion was to use a new RRtype with a query to ./IN/NEWRRTYPE.
 However, it was pointed out that this would not work going through stub resolvers that
 validate DNSSEC.
 
-An earlier design suggestion was to use DHCP to tell the OS the DoH servers that
+An earlier design suggestion was to use DHCP to tell the operating system the DoH servers that
 the stub resolver might use. That protocol is orthogonal to the one in this document
 in that it addresses a different use case. If both the protocol in this document and
 a DHCP-based protocol are standardized, they could co-exist. However, there is
@@ -280,6 +266,10 @@ the client might assume that the DoH server has the same information privacy pol
 the Do53 or DoT server.
 Therefore, a Do53 or DoT server SHOULD NOT recommend a DoH server unless that DoH server
 has the same (or better) information privacy policy as the Do53 or DoT server.
+
+A browser that has both a stub resolver stack and a TLS stack that is independent of HTTP
+could make a DOT connection to the resolver being used by the operating system.
+
 
 
 # Security Considerations {#seccons}
