@@ -49,6 +49,12 @@ what its associated DoH servers are.
 
 --- middle
 
+<!--
+
+Allow a resolver to locally host the SUDNs instead of needing to do it in resolution
+
+-->
+
 # Introduction
 
 DoH {{RFC8484}} requires that one or more DoH servers be configured
