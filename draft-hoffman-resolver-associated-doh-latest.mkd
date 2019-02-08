@@ -55,6 +55,8 @@ it is using, if it cannot find that address by an operating system API or some o
 
 Make body about browsers, add appendix about web applications
 
+Add a note about simple discovery of DoT servers
+
 -->
 
 # Introduction
@@ -78,7 +80,7 @@ implemented in the same way in DoH servers not affiliated with the user's
 organization.
 Users typically configure their DNS recursive resolvers with through
 automatic configuration from a protocol such as DHCP; much less often, they
-use  manual configuration (such as manually editing a /etc/named.conf file).
+use  manual configuration (such as manually editing a /etc/resolv.conf file).
 
 The expected use cases for DoH are browsers and web applications that would otherwise
 get their DNS service from the resolver configured by the operating system.
