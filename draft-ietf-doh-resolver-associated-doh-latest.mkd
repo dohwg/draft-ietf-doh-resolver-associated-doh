@@ -331,5 +331,4 @@ The use case in this document was inspired by discussions and the DRIU BoF
 at IETF 102 and later in the DNSOP Working Group.
 Vladimír Cunat, Philip Homburg, Shumon Huque, Martin Thomson, Eric
 Rescorla, and Tony Finch offered useful advice
-to improve early versions of the protocol. 
-
+to improve versions of the protocol before it came to the DOH Working Group. 
