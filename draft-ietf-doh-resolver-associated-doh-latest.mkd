@@ -55,14 +55,7 @@ it is using, if it cannot find that address by an operating system API or some o
 
 <!--
 
-Changes in -01:
-
-Reduced discussion about web applications
-
-Reorganized sections because adding protocols had messed up the comparisons
-
-Filled in more details for "DoH Servers from HTTPS"
-
+###### Add an example of TXT records
 
 ##### Add a note about simple discovery of DoT servers
 
