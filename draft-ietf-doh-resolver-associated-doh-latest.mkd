@@ -273,7 +273,11 @@ Status:  permanent
 
 # Privacy Considerations {#privconsid}
 
+<<<<<<< HEAD
 Allowing a user to use DoH instead of Do53 increases communication privacy (confidentiality and integrity) because
+=======
+Allowing a user to use DoH instead of Do53 increases communication privacy because
+>>>>>>> d14bbb6b2f3e417bec5f0695e7a8a3b5f419eb99
 of the TLS protection.
 
 When a Do53 or DoT server indicates that a particular DoH server is associated with it,
