@@ -35,6 +35,7 @@ normative:
     target: "https://www.iana.org/assignments/special-use-domain-names/"
 
 informative:
+  RFC4033:
   RFC6761:
   RFC6891:
   RFC7231:
@@ -54,15 +55,6 @@ it is using, if it cannot find that address by an operating system API or some o
 --- middle
 
 <!--
-
-###### Add an example of TXT records
-
-##### Add a note about simple discovery of DoT servers
-
-##### Deal with the fact that the OS connection to the resolver might
-not be authenticated, and even if it is, the browser doesn't know that
-
-##### What if there is a list of DoH servers? Pick one (how?) or jump around?
 
 
 -->
@@ -130,10 +122,20 @@ might say something like "DoH server associated with my current resolver"
 Alternatively, these protocols might be the default for a browser, and naming
 specific other DoH servers might be done with a UI.
 
+The protocols described here are meant for a browser to be able to start using
+DoH based on its current interactions with the resolver from the operating system
+on which the browser is running: they are not expected to work without being able
+to do DNS resolution. Even "DoH servers from HTTPS", which ostensibly only needs
+an IP address, is likely to need DNS resolution for things like OCSP servers during
+the setup of TLS.
+
 ## Terminology
 
-In this document, "client" means either a web browser or application. When one or the
-other is named explicitly, 
+In this document, "client" means either a browser or web application. When one or the
+other is named explicitly,
+
+In this document, "browser" means any application that can open ports in the operating
+system. This odd usage of the term "browser" is adopted from {{RFC8484}}.
 
 In this document, "DoT" is used to indicate DNS over TLS as defined in {{RFC7858}}.
 
@@ -146,6 +148,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
 and "OPTIONAL" in this document are to be interpreted as described in
 BCP 14 {{RFC2119}} {{RFC8174}} when, and only when, they
 appear in all capitals, as shown here.
+
 
 # DoH Servers from HTTPS {#doh_from_https}
 
@@ -175,6 +178,21 @@ is a single URI template.
 If the array of URI templates returned is empty, that indicates that the resolver does
 not have any DoH servers associated with it.
 
+For example, the returned object might look like:
+
+~~~
+{ "associated-resolvers":
+   [ "https://dnsserver.example.net/dns-query{?dns}",
+     "https://webhost.example.net/a/b/c/dns-query{?dns}" ]
+}
+~~~
+
+If there are no associated DoH servers, the returned object would look like:
+
+~~~
+{ "associated-resolvers": [ ] }
+~~~
+
 If the TLS authentication for the query fails, the browser MUST abort the connection
 without sending the HTTP request, and it cannot assume anything
 about whether the resolver has any DoH servers associated with it.
@@ -185,6 +203,7 @@ a resolver every time the configured resolver in the operating system changes.
 The HTTP query follows all the normal rules for HTTP.
 Thus, the result of sending this query can be an HTTP redirect to a different server.
 Also, the result of the query might be served from an HTTP cache.
+
 
 # DoH Servers from DNS {#doh_from_dns}
 
@@ -212,11 +231,30 @@ If a resolver that understands this protocol has no associated DoH servers, the 
 contains exactly one record that has an empty string as the RDATA; that is, the RDLENGTH
 in that record is 1, and the RDATA contains just the byte 0x00.
 
+An example of the TXT RRset (in DNS master file format) might be:
+
+~~~
+$ORIGIN resolver-associated-doh.arpa.
+ IN TXT "https://dnsserver.example.net/dns-query{?dns}"
+ IN TXT "https://webhost.example.net/a/b/c/dns-query{?dns}"
+~~~
+
+If there are no associated DoH servers, an example of the the TXT RRset (in DNS master file format) might be:
+
+~~~
+$ORIGIN resolver-associated-doh.arpa.
+ IN TXT ""
+~~~
+
 The client uses the TXT records in the response to the resolver-associated-doh.arpa/IN/TXT
 query as a list of the URI templates of the DoH servers associated with the resolver.
 Note that TXT records can contain multiple "character-strings" {{RFC1035}}; for this
 protocol, all characters-strings in a TXT record are concatenated to form a single URI
 template.
+
+A client using this protocol MUST try to establish a new list of DoH servers associated with
+a resolver every time the configured resolver in the operating system changes.
+
 
 # Resolver Addresses from DNS {#resolver_from_dns}
 
@@ -239,16 +277,18 @@ for "resolver-addresses.arpa"; if the resolver can be configured to also
 be authoritative for some zones, it can use that configuration to actually be
 authoritative for "resolver-addresses.arpa".
 
-# Issues Common to "DoH Servers from DNS" and "Resolver Addresses from DNS"
+A client using this protocol MUST try to establish a new list of DoH servers associated with
+a resolver every time the configured resolver in the operating system changes.
 
-See {{seccons}} for warnings about sending the DNS queries
-over a transport that does not assure data integrity (such as Do53),
-and over a transport that does assure data integrity (such as DoT) but
-in circumstances where the browser doesn't know the
-type of DNS transport being used.
 
-A client MUST re-issue the queries in "DoH Servers from DNS" and "Resolver Addresses from DNS"
-every time the configured resolver in the operating system changes.
+# Lists of DoH Servers
+
+The "DoH servers from HTTPS" "DoH servers from DNS" return lists of DoH servers,
+and those lists can have more than one element. The DoH client can choose any
+of the servers in the list; that is, there is no inherent "preference" for any
+of the serers returned. From a mathematical viewpoint, the lists can better
+be considered as sets.
+
 
 # IANA Considerations {#ianacons}
 
@@ -271,10 +311,15 @@ Specification document(s):  draft-ietf-doh-resolver-associated-doh
 Status:  permanent
 ~~~
 
+
 # Privacy Considerations {#privconsid}
 
-Allowing a user to use DoH instead of Do53 increases communication privacy because
-of the TLS protection.
+Allowing a user to use DoH to a server associated with the resolver in use
+by the operating system on the user's machine, instead of using Do53 to to
+the resolver in use by the operating system on the user's machine, can increase
+communication privacy because of the TLS protection.
+However, using a DoH server can also reduce overall privacy because both TLS
+and HTTPS allow for user identification in ways that plain Do53 does not.
 
 When a Do53 or DoT server indicates that a particular DoH server is associated with it,
 the client might assume that the DoH server has the same information privacy policies as
@@ -283,18 +328,30 @@ Therefore, a Do53 or DoT server SHOULD NOT recommend a DoH server unless that Do
 has the same (or better) information privacy policy as the Do53 or DoT server.
 
 A browser that has both a stub resolver stack and a TLS stack that is independent of HTTP
-could make a DOT connection to the resolver being used by the operating system.
+could make a DoT connection to the resolver being used by the operating system.
+
 
 # Security Considerations {#seccons}
 
+If DNS queries sent from stub resolvers to recursive resolvers are not sent over
+transports that assure data integrity and server authentication,
+the "DoH servers from DNS" and "Resolver addresses from DNS" protocols are susceptible
+to on-path attackers directing a user to a DoH server that is not actually associated with
+their resolver.
+Do53 is not a secure transport, and neither is DoT using the opportunistic profile.
+
+The DNS responses used in  "DoH servers from DNS" and "Resolver addresses from DNS"
+cannot be validated with DNSSEC {{RFC4033}}, and thus even a validating stub resolver
+would treat them the same as any other DNS responses in unsigned zones.
+
 There is currently no way for an application to know whether the operating system's stub
 resolver is using a transport that assures data integrity such as DoT. 
-
-Even is an application could determine the use of a transport like DoT, the application
+Even if an application could determine the use of a transport like DoT, the application
 would also need to know whether the transport was authenticated or was simply chosen
 opportunistically.
 
 --- back
+
 
 # Earlier Design Choices {#earlier_design_choices}
 
