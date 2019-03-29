@@ -45,8 +45,6 @@ informative:
 
 Browsers and web applications may want to know if there are one or more DoH servers
 associated with the DNS recursive resolver that the operating system is already using.
-This would allow them to get DNS responses from a resolver that the user
-(or, more likely, the user's network administrator) has already chosen.
 This document describes two protocols for a resolver to tell a client
 what its associated DoH servers are.
 It also describes a protocol for a client to find out the address of the resolver
@@ -95,6 +93,8 @@ on the resolver itself, or a resolver hosted by the same operator, or even
 hosted somewhere else. The latter could be used by resolver operators who
 don't want to host DoH servers but trust another operator to do so.
 
+## Protocol Overview
+
 To address these use cases, this document defines protocols to
 get the list of URI templates {{RFC6570}} or addresses for the DoH servers associated with
 at least one of the resolvers being used by the operating system on the
@@ -111,6 +111,25 @@ to return the URI templates as a TXT RRset.
 * "resolver addresses from DNS", described in {{resolver_from_dns}},
 is a new SUDN that that can be queried
 to return the addresses as A and AAAA RRsets.
+
+The discovery protocols in this document allow the party controlling
+the client's network routing and operating system configurtion to
+propose one or more DoH configurations to the client. Unfortunately,
+the entity with this control is generally not authenticated by the
+client. Therefore the assurances of this protocol are
+substantively different and weaker than being able to assert
+that the network provider selected by the user (e.g. ISP or
+enterprise) is signaling associated DoH configurations.
+
+Common forms of network access do not authenticate the
+actual network in use (e.g. wifi), nor do they authenticate the
+configuration information carried on them (e.g. DHCP), nor do they
+provide strong protection against attacks from other entities on the
+network. The security model of HTTPS, used by DoH, is normally robust in the
+face of insecure paths, but it requires that the origin name to be authenticated
+is established through a trusted channel. Lower level network
+primitives often do not provide this mechanism, and this specification
+does not require one.
 
 For these protocols to be useful in a browser, the browser needs to have an entry in
 its configuration interface where the allowed DoH servers are listed that indicates
@@ -332,13 +351,14 @@ could make a DoT connection to the resolver being used by the operating system.
 
 # Security Considerations {#seccons}
 
-If DNS queries sent from stub resolvers to recursive resolvers are
-not sent over transports that assure data integrity and server
-authentication, the "DoH servers from DNS" and "Resolver addresses
-from DNS" protocols are susceptible to on-path attackers directing a
-user to a DoH server that is not actually associated with their
-resolver.  Do53 is not a secure transport, and neither is DoT using
-the opportunistic profile.
+The normal security properties of TLS as used by both DoH and
+non-opportunistic DoT are diminished by validating a connection with a
+name that was specified by a non authenticated source such as this
+protocol.  Under an attack scenario this is akin to validating your
+attacker's ID but first asking them what name you should be looking
+for. This only ensures the client is having a private conversation
+with the attacker. Passive attack scenarios do benefit from the use of
+HTTPS in this case when contrasted with plaintext Do53.
 
 The DNS responses used in "DoH servers from DNS" and "Resolver
 addresses from DNS" cannot be validated with DNSSEC {{RFC4033}}, and
