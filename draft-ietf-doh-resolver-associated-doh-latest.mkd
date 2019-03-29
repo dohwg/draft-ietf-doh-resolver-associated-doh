@@ -345,12 +345,15 @@ addresses from DNS" cannot be validated with DNSSEC {{RFC4033}}, and
 thus even a validating stub resolver would treat them the same as any
 other DNS responses in unsigned zones.
 
-There is currently no way for an application to know whether the
-operating system's stub resolver is using a transport that assures
-data integrity such as DoT.  Even if an application could determine
-the use of a transport like DoT, the application would also need to
-know whether the transport was authenticated or was simply chosen
-opportunistically.
+When considering whether or not to use an associated DoH server it
+would be helpful to understand the security and privact properties of
+the operating systems default stub resolver. Unfortunately, there is
+currently no way for an application to know whether the operating
+system's stub resolver is using a transport that assures data
+integrity such as DoT or DoH.  Even if an application could determine
+the use of an alternative transport, the application would also need
+to know whether the transport was authenticated or what policies it is
+enforcing.
 
 --- back
 
