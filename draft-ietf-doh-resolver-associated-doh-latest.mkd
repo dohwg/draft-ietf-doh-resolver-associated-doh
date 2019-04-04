@@ -260,7 +260,7 @@ in the operating system changes.
 # Resolver Addresses from DNS {#resolver_from_dns}
 
 Browsers which cannot get the IP address(es) of the resolver configured by
-the operating system using APIs are still able to use an operating system function such as gethostbyname()
+the operating system using APIs are still able to use an operating system function such as getaddrinfo()
 or its equivalents to convert host names into
 IP addresses through the stub resolver in the operating system on which they are running.
 Web applications also can convert host names to IP addresses.
