@@ -76,7 +76,9 @@ nor what the user interface (UI) for the configuration should be.
 There is a use case for browsers and web applications to want the DNS
 recursive resolver(s) configured in the operating system to use DoH for DNS
 resolution instead of normal DNS, but to do so to at a DoH server specified
-by the configured resolver.
+by the configured resolver rather than configuring those applications
+with DoH server information.
+
 For example, a recursive resolver configured by the operating system may
 know how to give correct answers to DNS queries that contain names that are
 only resolvable in the local context, or resolve differently in the local
@@ -94,7 +96,7 @@ otherwise get their DNS service from the resolver configured by the
 operating system. The user of the client might have a preference for using a
 DoH server for the benefits that DoH brings, and they might need to use a
 DoH server that is associated with the resolver that the computer is
-currently using for the reasons listed above. In a common enterprise scenario, users may
+currently using for the reasons listed above. In a common scenario, users may
 be required to use only resolvers that are approved by their organization's
 network operators.
 
@@ -268,7 +270,7 @@ in the operating system changes.
 # Resolver Addresses from DNS {#resolver_from_dns}
 
 Browsers which cannot get the IP address(es) of the resolver configured by
-the operating system using APIs are still able to use an operating system function such as gethostbyname()
+the operating system using APIs are still able to use an operating system function such as getaddrinfo()
 or its equivalents to convert host names into
 IP addresses through the stub resolver in the operating system on which they are running.
 Web applications also can convert host names to IP addresses.
@@ -353,12 +355,15 @@ addresses from DNS" cannot be validated with DNSSEC {{RFC4033}}, and
 thus even a validating stub resolver would treat them the same as any
 other DNS responses in unsigned zones.
 
-There is currently no way for an application to know whether the
-operating system's stub resolver is using a transport that assures
-data integrity such as DoT.  Even if an application could determine
-the use of a transport like DoT, the application would also need to
-know whether the transport was authenticated or was simply chosen
-opportunistically.
+When considering whether or not to use an associated DoH server it
+would be helpful to understand the security and privact properties of
+the operating systems default stub resolver. Unfortunately, there is
+currently no way for an application to know whether the operating
+system's stub resolver is using a transport that assures data
+integrity such as DoT or DoH.  Even if an application could determine
+the use of an alternative transport, the application would also need
+to know whether the transport was authenticated or what policies it is
+enforcing.
 
 --- back
 
