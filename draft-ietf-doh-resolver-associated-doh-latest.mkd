@@ -56,6 +56,14 @@ it is using, if it cannot find that address by an operating system API or some o
 
 <!--
 
+- The resolver IP addresses returned from DNS on section 4 are these Do53 server addresses or DoH server address or are they just the IP to start the process in section 2 (maybe 3)?
+
+They are the IP addresses of the Do53 resolver that the computer is using. I'll make that clearer in the next draft.
+
+- On section 3 a non compliant current server will return NXDomain. What are we going to do with this answer (treat is as no DoH associated)?
+
+Yes, that was the intention. I'll clarify that.
+
 -->
 
 # Introduction
@@ -78,7 +86,7 @@ implement security policies such as malware prevention that are not
 implemented in the same way in DoH servers not affiliated with the user's
 organization.
 Users typically configure their DNS recursive resolvers with
-automatic configuration from a protocol such as DHCP; much less often, they
+automatic configuration from a protocol such as DHCP; less often, they
 use  manual configuration (such as manually editing a /etc/resolv.conf file).
 
 The expected use cases for DoH are browsers and web applications that would
@@ -86,7 +94,7 @@ otherwise get their DNS service from the resolver configured by the
 operating system. The user of the client might have a preference for using a
 DoH server for the benefits that DoH brings, and they might need to use a
 DoH server that is associated with the resolver that the computer is
-currently using for the reasons listed above. In a common scenario, user may
+currently using for the reasons listed above. In a common enterprise scenario, users may
 be required to use only resolvers that are approved by their organization's
 network operators.
 
@@ -287,7 +295,7 @@ in the operating system changes.
 The "DoH servers from HTTPS" "DoH servers from DNS" return lists of
 DoH servers, and those lists can have more than one element.  The DoH	
 client can choose any of the servers in the list; that is, there is	
-no inherent "preference" for any of the serers returned.  From a	
+no inherent "preference" for any of the servers returned.  From a	
 mathematical viewpoint, the lists can better be considered as sets.
 		 	   
 # IANA Considerations {#ianacons}
